@@ -1,87 +1,218 @@
+import streamlit as st
 import heapq
 
+st.set_page_config(page_title="MST Visualizer", page_icon="🌳", layout="wide")
 
-def dijkstra(graph, source):
-    """
-    Dijkstra's Algorithm using Min-Heap
+st.title("🌳 Minimum Spanning Tree (MST)")
+st.subheader("Kruskal's Algorithm vs Prim's Algorithm")
 
-    Time Complexity: O((V + E) log V)
-    Space Complexity: O(V)
+# ---------------- Union-Find ----------------
 
-    graph: Dictionary {u: [(v, weight), ...]}
-    """
+class UnionFind:
+    def __init__(self, n):
+        self.parent = list(range(n))
+        self.rank = [0] * n
 
-    n = len(graph)
+    def find(self, x):
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
 
-    dist = [float("inf")] * n
-    prev = [None] * n
+    def union(self, x, y):
+        rx = self.find(x)
+        ry = self.find(y)
 
-    dist[source] = 0
+        if rx == ry:
+            return False
 
-    pq = [(0, source)]  # (distance, vertex)
-    visited = set()
+        if self.rank[rx] < self.rank[ry]:
+            rx, ry = ry, rx
+
+        self.parent[ry] = rx
+
+        if self.rank[rx] == self.rank[ry]:
+            self.rank[rx] += 1
+
+        return True
+
+
+# ---------------- Kruskal ----------------
+
+def kruskal(n, edges):
+
+    edges = sorted(edges)
+
+    uf = UnionFind(n)
+
+    mst = []
+    cost = 0
+
+    for w, u, v in edges:
+
+        if uf.union(u, v):
+
+            mst.append((u, v, w))
+            cost += w
+
+            if len(mst) == n - 1:
+                break
+
+    return mst, cost
+
+
+# ---------------- Prim ----------------
+
+def prim(n, adj, start=0):
+
+    key = [float("inf")] * n
+    parent = [-1] * n
+    visited = [False] * n
+
+    key[start] = 0
+
+    pq = [(0, start)]
+
+    mst = []
+    cost = 0
 
     while pq:
-        d, u = heapq.heappop(pq)
 
-        if u in visited:
+        w, u = heapq.heappop(pq)
+
+        if visited[u]:
             continue
 
-        visited.add(u)
+        visited[u] = True
 
-        for v, w in graph[u]:
-            if dist[u] + w < dist[v]:
-                dist[v] = dist[u] + w
-                prev[v] = u
-                heapq.heappush(pq, (dist[v], v))
+        if parent[u] != -1:
+            mst.append((parent[u], u, w))
+            cost += w
 
-    return dist, prev
+        for v, wt in adj.get(u, []):
 
+            if not visited[v] and wt < key[v]:
 
-def reconstruct_path(prev, source, target):
-    path = []
-    node = target
+                key[v] = wt
+                parent[v] = u
+                heapq.heappush(pq, (wt, v))
 
-    while node is not None:
-        path.append(node)
-        node = prev[node]
-
-    path.reverse()
-
-    if path and path[0] == source:
-        return path
-
-    return []
+    return mst, cost
 
 
-# ---------------- Graph Definition ----------------
+# ---------------- Sample Graph ----------------
 
-graph = {
-    0: [(1, 4), (2, 1)],
-    1: [(3, 1)],
-    2: [(1, 2), (3, 5)],
-    3: [(4, 3)],
-    4: [(5, 2)],
-    5: []
-}
+n = 7
 
-source = 0
+edges = [
+    (7, 0, 1),
+    (5, 0, 3),
+    (8, 1, 2),
+    (9, 1, 3),
+    (7, 1, 4),
+    (5, 2, 4),
+    (15, 3, 4),
+    (6, 3, 5),
+    (8, 4, 5),
+    (9, 4, 6),
+    (11, 5, 6)
+]
 
-dist, prev = dijkstra(graph, source)
+adj = {}
 
-print(f"Shortest paths from vertex {source}:\n")
+for w, u, v in edges:
+    adj.setdefault(u, []).append((v, w))
+    adj.setdefault(v, []).append((u, w))
 
-print("{:<8}{:<12}{}".format("Vertex", "Distance", "Path"))
-print("-" * 45)
+# ---------------- Display Graph ----------------
 
-for v in range(len(graph)):
-    path = reconstruct_path(prev, source, v)
+st.header("Input Graph")
 
-    if path:
-        path_str = " -> ".join(map(str, path))
-    else:
-        path_str = "No Path"
+st.table(
+    {
+        "Node U": [u for w, u, v in edges],
+        "Node V": [v for w, u, v in edges],
+        "Weight": [w for w, u, v in edges]
+    }
+)
 
-    distance = dist[v] if dist[v] != float("inf") else "INF"
+# ---------------- Buttons ----------------
 
-    print("{:<8}{:<12}{}".format(v, distance, path_str))
+col1, col2 = st.columns(2)
+
+with col1:
+
+    if st.button("Run Kruskal"):
+
+        mst, cost = kruskal(n, edges)
+
+        st.success("Kruskal's Algorithm Completed")
+
+        st.write("### MST Edges")
+
+        st.table(
+            {
+                "From": [u for u, v, w in mst],
+                "To": [v for u, v, w in mst],
+                "Weight": [w for u, v, w in mst]
+            }
+        )
+
+        st.metric("Total Cost", cost)
+
+with col2:
+
+    if st.button("Run Prim"):
+
+        mst, cost = prim(n, adj)
+
+        st.success("Prim's Algorithm Completed")
+
+        st.write("### MST Edges")
+
+        st.table(
+            {
+                "From": [u for u, v, w in mst],
+                "To": [v for u, v, w in mst],
+                "Weight": [w for u, v, w in mst]
+            }
+        )
+
+        st.metric("Total Cost", cost)
+
+# ---------------- Compare ----------------
+
+if st.button("Compare Both Algorithms"):
+
+    kmst, kcost = kruskal(n, edges)
+    pmst, pcost = prim(n, adj)
+
+    st.header("Comparison")
+
+    st.write("### Kruskal")
+
+    st.table(
+        {
+            "From": [u for u, v, w in kmst],
+            "To": [v for u, v, w in kmst],
+            "Weight": [w for u, v, w in kmst]
+        }
+    )
+
+    st.metric("Kruskal Cost", kcost)
+
+    st.write("---")
+
+    st.write("### Prim")
+
+    st.table(
+        {
+            "From": [u for u, v, w in pmst],
+            "To": [v for u, v, w in pmst],
+            "Weight": [w for u, v, w in pmst]
+        }
+    )
+
+    st.metric("Prim Cost", pcost)
+
+    if kcost == pcost:
+        st.success("Both algorithms produce the same Minimum Spanning Tree cost.")
